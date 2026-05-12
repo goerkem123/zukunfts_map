@@ -3,119 +3,187 @@ import folium
 from streamlit_folium import st_folium
 import pandas as pd
 from backend import lade_daten_und_koordinaten 
-from folium.plugins import MarkerCluster  # <--- HIER war der Fehler!
+from folium.plugins import MarkerCluster
 
-# 1. Webseite & Branding
-st.set_page_config(page_title="Karriere-Hub Pro", page_icon="💼", layout="wide")
+# 1. KONFIGURATION
+st.set_page_config(page_title="GG Karriere Hub Pro", page_icon="💼", layout="wide")
+
+# --- DER ULTIMATIVE UI-FIX (CSS) ---
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+        color: #f8fafc;
+        background-color: #0f172a !important;
+    }
+
+    /* SIDEBAR */
+    [data-testid="stSidebar"] {
+        background-color: #020617 !important; 
+        border-right: 1px solid #1e293b;
+    }
+
+    /* FIX: Sidebar Labels */
+    [data-testid="stWidgetLabel"] p {
+        color: #f1f5f9 !important;
+        font-weight: 600 !important;
+    }
+
+    /* --- MULTISELECT: REINSCHREIBEN VERBIETEN & BLOB KILLEN --- */
+    /* 1. Tippen komplett blockieren */
+    div[data-baseweb="select"] input {
+        pointer-events: none !important;
+        caret-color: transparent !important;
+        user-select: none !important;
+    }
+
+    /* 2. Den "Blob" links (Such-Icon Container) radikal entfernen */
+    div[data-baseweb="select"] div[role="presentation"] {
+        display: none !important;
+    }
+    
+    /* Falls Streamlit das Icon anders benennt - alle Icons im Select verstecken */
+    div[data-baseweb="select"] svg[viewBox="0 0 24 24"] {
+        display: none !important;
+    }
+
+    /* Den dunklen Hintergrund-Schatten im Feld löschen */
+    div[data-baseweb="select"] > div:first-child {
+        background-color: transparent !important;
+    }
+
+    /* 3. Die Tags (Bio/IT) sauber stylen */
+    span[data-baseweb="tag"] {
+        background-color: #3b82f6 !important;
+        color: #FFFFFF !important;
+        border-radius: 6px !important;
+    }
+    span[data-baseweb="tag"] * {
+        background-color: transparent !important;
+    }
+
+    /* INPUT FELDER ALLGEMEIN */
+    div[data-baseweb="select"], div[data-baseweb="input"] {
+        background-color: #1e293b !important;
+        border-radius: 10px !important;
+        border: 1px solid #334155 !important;
+    }
+
+    /* METRIC CARDS */
+    div[data-testid="stMetric"] {
+        background: #020617 !important;
+        border: 1px solid #1e293b !important;
+        padding: 1.5rem !important;
+        border-radius: 16px !important;
+    }
+    div[data-testid="stMetricLabel"] > div > p { color: #3b82f6 !important; }
+    div[data-testid="stMetricValue"] > div { color: #f8fafc !important; font-weight: 700 !important; }
+
+    /* TABS */
+    .stTabs [data-baseweb="tab-list"] { gap: 30px; }
+    .stTabs [data-baseweb="tab"] {
+        font-weight: 600 !important;
+        color: #94a3b8 !important;
+        background: transparent !important;
+    }
+    .stTabs [aria-selected="true"] {
+        color: #3b82f6 !important;
+        border-bottom: 2px solid #3b82f6 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Daten laden
 df = lade_daten_und_koordinaten()
 
-# --- HILFSFUNKTION FÜR STERNE (Robust & Sicher) ---
-def konvertiere_zu_sternen(wert):
+# --- HELPER ---
+def get_stars(val):
     try:
-        # Versuche den Wert in eine Ganzzahl umzuwandeln (egal ob 5, 5.0 oder "5")
-        anzahl = int(float(wert))
-        if anzahl > 0:
-            return "⭐" * anzahl
-    except:
-        pass
-    return "-"
+        n = int(float(val))
+        return "★" * n + "☆" * (5-n) if 0 < n <= 5 else "—"
+    except: return "—"
 
-# 2. SIDEBAR
+# --- SIDEBAR ---
 with st.sidebar:
-    st.title("🔍 Filter & Suche")
-    suche = st.text_input("Firma suchen...", placeholder="z.B. Microsoft")
-    rollen_mapping = {"Bio": "Gözde (Bio)", "IT": "Görkem (IT)"}
-    auswahl = st.multiselect("Wer sucht?", options=["Bio", "IT"], default=["Bio", "IT"], format_func=lambda x: rollen_mapping[x])
+    st.markdown('<div style="color:white; font-size:1.6rem; font-weight:700; margin-bottom:2rem;">CareerHub <span style="color:#3b82f6">GG</span></div>', unsafe_allow_html=True)
     
-    # LIVE BEWERTUNG
+    st.markdown("### 🔍 Filter & Suche")
+    suche = st.text_input("Name der Firma", placeholder="Suchen...")
+    auswahl = st.multiselect("Bereich", options=["Bio", "IT"], default=["Bio", "IT"])
+    
     st.markdown("---")
-    st.subheader("⭐ Firma live bewerten")
-    firma_auswahl = st.selectbox("Firma wählen:", sorted(df['Firma'].unique()))
-    score = st.feedback("stars")
-    if score is not None:
-        neue_note = score + 1
-        if st.button(f"{neue_note} Sterne für {firma_auswahl} speichern"):
+    
+    st.markdown("### ✨ Quick Rate")
+    f_name = st.selectbox("Unternehmen", sorted(df['Firma'].unique()))
+    rating = st.feedback("stars")
+    if rating is not None:
+        if st.button("Rating speichern", use_container_width=True):
             from backend import update_bewertung
-            update_bewertung(firma_auswahl, neue_note)
-            st.success("Gespeichert! Bitte Seite neu laden.")
+            update_bewertung(f_name, rating + 1)
+            st.success("Gespeichert!")
             st.rerun()
 
-# 3. FILTER-LOGIK
-maske = df["Bereich"].isin(auswahl)
+# --- LOGIK ---
+mask = df["Bereich"].isin(auswahl)
 if suche:
-    maske = maske & df["Firma"].str.contains(suche, case=False)
-df_gefiltert = df[maske]
+    mask = mask & df["Firma"].str.contains(suche, case=False)
+df_view = df[mask]
 
-# 4. HAUPTSEITE MIT DREI TABS
-st.title("💼 Unser Karriere-Hub: Gözde & Görkem")
+# --- MAIN UI ---
+st.markdown('<h1 style="color:white; font-size:3rem; font-weight:800;">Dashboard</h1>', unsafe_allow_html=True)
 
-# Hier fügen wir den dritten Tab hinzu
-tab1, tab2, tab3 = st.tabs(["🗺️ Interaktive Karte", "📊 Standort-Analyse", "⭐ Bewertungen"])
+m1, m2, m3 = st.columns(3)
+m1.metric("Gesamt", len(df_view))
+m2.metric("Gözde (Bio)", len(df_view[df_view['Bereich'] == 'Bio']))
+m3.metric("Görkem (IT)", len(df_view[df_view['Bereich'] == 'IT']))
+
+st.write("")
+
+tab1, tab2, tab3 = st.tabs(["🗺️ Karte", "📊 Analyse", "📋 Listen"])
 
 # --- TAB 1: KARTE ---
 with tab1:
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Firmen im Fokus", len(df_gefiltert))
-    col2.metric("Gözde (Bio)", len(df_gefiltert[df_gefiltert['Bereich'] == 'Bio']))
-    col3.metric("Görkem (IT)", len(df_gefiltert[df_gefiltert['Bereich'] == 'IT']))
-
-    # Karte erstellen
     m = folium.Map(location=[51.1657, 10.4515], zoom_start=6, tiles="CartoDB positron")
-    
-    # NEU: Das Cluster-Objekt erstellen
-    marker_cluster = MarkerCluster().add_to(m)
+    cluster = MarkerCluster().add_to(m)
 
-    for index, reihe in df_gefiltert.iterrows():
-        # Sterne & Logo Logik
-        sterne_text = konvertiere_zu_sternen(reihe['Bewertung'])
-        logo = reihe['Logo_URL'] if pd.notna(reihe['Logo_URL']) and str(reihe['Logo_URL']).startswith("http") else "https://via.placeholder.com/50"
+    for _, row in df_view.iterrows():
+        stars = get_stars(row['Bewertung'])
+        icon_emoji = "🧬" if row["Bereich"] == "Bio" else "💻"
+        color = "#dbeafe" if row["Bereich"] == "Bio" else "#fee2e2"
+        border = "#2563eb" if row["Bereich"] == "Bio" else "#dc2626"
         
-        popup_html = f"""
-        <div style="text-align: center; min-width: 150px;">
-            <img src="{logo}" width="50" style="border-radius: 5px;"><br>
-            <b>{reihe['Firma']}</b><br>
-            {sterne_text}
-        </div>
+        icon_html = f"""
+            <div style="background-color:{color}; border:1.5px solid {border}; border-radius:10px; width:32px; height:32px; 
+            display:flex; align-items:center; justify-content:center; font-size:16px; box-shadow:0 4px 8px rgba(0,0,0,0.3);">
+                {icon_emoji}
+            </div>
         """
-        
-        farbe = "blue" if reihe["Bereich"] == "Bio" else "red"
-        
-        # Den Marker jetzt zum 'marker_cluster' hinzufügen, nicht direkt zu 'm'
         folium.Marker(
-            location=[reihe["Breitengrad"], reihe["Laengengrad"]],
-            popup=folium.Popup(popup_html, max_width=250),
-            tooltip=reihe["Firma"],
-            icon=folium.Icon(color=farbe, icon="briefcase", prefix='fa')
-        ).add_to(marker_cluster)
-
-    # Die Karte im Streamlit-Tab anzeigen
-    st_folium(m, width="100%", height=550)
-
-# --- TAB 2: NUR DIAGRAMME ---
-with tab2:
-    st.subheader("🏙️ Standort-Ranking")
-    city_counts = df_gefiltert['Stadt'].value_counts()
-    col_chart, col_data = st.columns([2, 1])
-    with col_chart:
-        st.bar_chart(city_counts)
-    with col_data:
-        st.dataframe(city_counts, column_config={"count": "Anzahl"}, use_container_width=True)
-
-# --- TAB 3: NUR BEWERTUNGEN (Die getrennten Listen) ---
-with tab3:
-    st.subheader("⭐ Unsere Favoriten im Detail")
+            [row["Breitengrad"], row["Laengengrad"]],
+            icon=folium.DivIcon(html=icon_html),
+            popup=folium.Popup(f'<div style="text-align:center; color:#1e293b;"><b>{row["Firma"]}</b><br>{stars}</div>', max_width=150)
+        ).add_to(cluster)
     
-    df_show = df_gefiltert.copy()
-    df_show["Sterne"] = df_show["Bewertung"].apply(konvertiere_zu_sternen)
+    st_folium(m, width="100%", height=600, use_container_width=True)
 
-    col_goezde, col_goerkem = st.columns(2)
+# --- TAB 2: ANALYSE ---
+with tab2:
+    st.subheader("Top Standorte")
+    if not df_view.empty:
+        counts = df_view['Stadt'].value_counts().head(10)
+        col_chart, col_data = st.columns([2, 1])
+        with col_chart:
+            st.bar_chart(counts, color="#3b82f6")
+        with col_data:
+            st.dataframe(counts, use_container_width=True)
+    else:
+        st.info("Keine Daten vorhanden.")
 
-    with col_goezde:
-        st.markdown("### 🧬 Gözde (Bio)")
-        df_bio = df_show[df_show['Bereich'] == 'Bio'].sort_values(by="Firma")
-        st.dataframe(df_bio[["Firma", "Stadt", "Sterne"]], use_container_width=True, hide_index=True)
-
-    with col_goerkem:
-        st.markdown("### 💻 Görkem (IT)")
-        df_it = df_show[df_show['Bereich'] == 'IT'].sort_values(by="Firma")
-        st.dataframe(df_it[["Firma", "Stadt", "Sterne"]], use_container_width=True, hide_index=True)
+# --- TAB 3: LISTEN ---
+with tab3:
+    st.subheader("Detail-Listen")
+    df_stars = df_view.copy()
+    df_stars["Sterne"] = df_stars["Bewertung"].apply(get_stars)
+    st.dataframe(df_stars[["Firma", "Stadt", "Sterne", "Bereich"]], hide_index=True, use_container_width=True)
